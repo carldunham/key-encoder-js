@@ -1,6 +1,7 @@
 var test = require('tape'),
     KeyEncoder = require('./index'),
     ECPrivateKeyASN = KeyEncoder.ECPrivateKeyASN,
+    ECPrivateKeyPKCS8ASN = KeyEncoder.ECPrivateKeyPKCS8ASN,
     SubjectPublicKeyInfoASN = KeyEncoder.SubjectPublicKeyInfoASN,
     BN = require('bn.js')
 
@@ -15,6 +16,11 @@ var keys = {
     pemCompactPrivate: '-----BEGIN EC PRIVATE KEY-----\n' +
     'MC4CAQEEIIRAVcyhPv14znmkw6TFq6XbDr63rp1WkGwD0zPFZo1boAcGBSuBBAAK\n' +
     '-----END EC PRIVATE KEY-----',
+    pemPrivatePKCS8: '-----BEGIN PRIVATE KEY-----\n' +
+    'MIGEAgEAMBAGByqGSM49AgEGBSuBBAAKBG0wawIBAQQghEBVzKE+/XjOeaTDpMWr\n' +
+    'pdsOvreunVaQbAPTM8VmjVuhRANCAAQUe3np4d0zJM7qEV/0A3tsh3xzd3ExQYv7\n' +
+    'K3E+/9D1AjJ7kjhhWBvVU17q4AZ2Umn0BPX1xSIU6XIbBKp9BAp1\n' +
+    '-----END PRIVATE KEY-----',
     pemPublic: '-----BEGIN PUBLIC KEY-----\n' +
     'MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEFHt56eHdMyTO6hFf9AN7bId8c3dxMUGL\n' +
     '+ytxPv/Q9QIye5I4YVgb1VNe6uAGdlJp9AT19cUiFOlyGwSqfQQKdQ==\n' +
@@ -46,6 +52,35 @@ test('encodeECPrivateKeyASN', function(t) {
 
     var openSSLPrivateKeyObject = ECPrivateKeyASN.decode(keys.pemPrivate, 'pem', pemOptions)
     t.equal(JSON.stringify(privateKeyObject), JSON.stringify(openSSLPrivateKeyObject), 'private key object should match the one decoded from the OpenSSL PEM')
+})
+
+test('encodeECPrivateKeyPKCS8ASN', function(t) {
+    t.plan(3)
+
+    var secp256k1Parameters = [1, 3, 132, 0, 10],
+        pemOptions =  {label: 'PRIVATE KEY'}
+
+    var privateKeyPKCS8Object = {
+        version: new BN(0),
+        privateKeyAlgorithm: {
+          algorithm: [ 1, 2, 840, 10045, 2, 1 ],
+          parameters: new Buffer([6,5,43,129,4,0,10])
+        },
+        privateKey: KeyEncoder.ECPrivateKeyPKCS8PrivateKeyASN.encode({
+          version: new BN(1),
+          privateKey: new Buffer(keys.rawPrivate, 'hex'),
+          publicKey: { unused: 0, data: new Buffer(keys.rawPublic, 'hex') }
+        }, 'der')
+    }
+
+    var openSSLPrivateKeyObject = ECPrivateKeyPKCS8ASN.decode(keys.pemPrivatePKCS8, 'pem', pemOptions)
+    t.equal(JSON.stringify(privateKeyPKCS8Object), JSON.stringify(openSSLPrivateKeyObject), 'PKCS8 private key object should match the one decoded from the OpenSSL PEM')
+
+    var privateKeyPEM = ECPrivateKeyPKCS8ASN.encode(privateKeyPKCS8Object, 'pem', pemOptions)
+    t.equal(privateKeyPEM, keys.pemPrivatePKCS8, 'encoded PKCS8 PEM private key should match the OpenSSL reference')
+
+    var decodedPrivateKeyObject = ECPrivateKeyPKCS8ASN.decode(privateKeyPEM, 'pem', pemOptions)
+    t.equal(JSON.stringify(privateKeyPKCS8Object), JSON.stringify(decodedPrivateKeyObject), 'encoded-and-decoded PKCS8 private key object should match the original')
 })
 
 test('encodeSubjectPublicKeyInfoASN', function(t) {
